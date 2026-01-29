@@ -1,4 +1,4 @@
-# logic.py - Conversation State Machine (FIXED VERSION)
+# logic.py - FIXED VERSION
 from models import get_db, Patient, Consultation, ConversationState
 from ai_service import analyze_symptoms, generate_response
 from config import CLINIC_NAME
@@ -19,9 +19,9 @@ def get_or_create_state(phone):
     
     return state
 
-def update_state(phone, new_state, data=None):
-    """Update conversation state"""
-    db = get_db()
+def update_state(phone, new_state, data=None, session=None):
+    """Update conversation state - NOW SUPPORTS SESSION PASSING"""
+    db = session if session else get_db()
     state = db.query(ConversationState).filter_by(phone=phone).first()
     
     if state:
@@ -51,7 +51,6 @@ def triage(incoming_msg, phone):
     """
     Main triage function - handles all conversation states
     """
-    # Normalize input
     msg = incoming_msg.strip()
     msg_upper = msg.upper()
     
@@ -59,7 +58,6 @@ def triage(incoming_msg, phone):
     state = get_or_create_state(phone)
     patient = get_patient(phone)
     
-    # FIXED: Removed problematic re-query that caused stale objects
     context = json.loads(state.data) if state.data else {}
     
     # Handle RESET command anywhere
@@ -98,17 +96,27 @@ def handle_name(msg, phone, patient, context):
     """Process name and move to symptoms"""
     try:
         db = get_db()
+        
+        # CRITICAL FIX: Merge patient into current session to prevent detached instance error
+        patient = db.merge(patient)
+        
         patient.name = msg.title()
         patient.last_visit = datetime.utcnow()
-        db.commit()
-        db.refresh(patient)  # FIXED: Refresh patient object to prevent stale data
         
+        # Save context before state update
         context["name"] = msg.title()
-        update_state(phone, "awaiting_symptoms", context)
+        
+        # Commit patient changes
+        db.commit()
+        db.refresh(patient)
+        
+        # Update state using SAME session
+        update_state(phone, "awaiting_symptoms", context, session=db)
         
         return f"Thank you, {patient.name}. 👋\n\nPlease describe what brings you here today. You can say something like:\n• 'I have headache and fever'\n• 'Stomach pain for 3 days'\n• 'Chest pain when breathing'"
     except Exception as e:
         db.rollback()
+        print(f"❌ ERROR in handle_name: {str(e)}")  # Check your logs for this
         return "❌ Sorry, there was an error saving your name. Please try again."
 
 def handle_symptoms(msg, phone, patient, context):
@@ -199,6 +207,10 @@ def handle_hospital_selection(msg, phone, patient, context):
         # Save consultation to DB
         try:
             db = get_db()
+            
+            # Merge patient to ensure it's in this session
+            patient = db.merge(patient)
+            
             consultation = Consultation(
                 patient_phone=phone,
                 symptoms=context.get("symptoms", ""),
@@ -232,6 +244,7 @@ def handle_hospital_selection(msg, phone, patient, context):
 Type NEW for another consultation."""
         except Exception as e:
             db.rollback()
+            print(f"❌ ERROR in handle_hospital_selection: {str(e)}")
             return "❌ Sorry, there was an error saving your booking. Please try again."
     
     else:
