@@ -1,4 +1,4 @@
-# logic.py - Conversation State Machine
+# logic.py - Conversation State Machine (FIXED VERSION)
 from models import get_db, Patient, Consultation, ConversationState
 from ai_service import analyze_symptoms, generate_response
 from config import CLINIC_NAME
@@ -53,16 +53,13 @@ def triage(incoming_msg, phone):
     """
     # Normalize input
     msg = incoming_msg.strip()
-    msg_upper = msg.upper()  # FIXED: Define msg_upper here
+    msg_upper = msg.upper()
     
     # Get state and patient
     state = get_or_create_state(phone)
     patient = get_patient(phone)
     
-    # Refresh state to prevent detached instance
-    db = get_db()
-    state = db.query(ConversationState).filter_by(phone=phone).first()
-    
+    # FIXED: Removed problematic re-query that caused stale objects
     context = json.loads(state.data) if state.data else {}
     
     # Handle RESET command anywhere
@@ -99,16 +96,20 @@ def handle_greeting(msg, phone, patient, context):
 
 def handle_name(msg, phone, patient, context):
     """Process name and move to symptoms"""
-    # Update patient name
-    db = get_db()
-    patient.name = msg.title()
-    patient.last_visit = datetime.utcnow()
-    db.commit()
-    
-    context["name"] = msg.title()
-    update_state(phone, "awaiting_symptoms", context)
-    
-    return f"Thank you, {msg.title()}. 👋\n\nPlease describe what brings you here today. You can say something like:\n• 'I have headache and fever'\n• 'Stomach pain for 3 days'\n• 'Chest pain when breathing'"
+    try:
+        db = get_db()
+        patient.name = msg.title()
+        patient.last_visit = datetime.utcnow()
+        db.commit()
+        db.refresh(patient)  # FIXED: Refresh patient object to prevent stale data
+        
+        context["name"] = msg.title()
+        update_state(phone, "awaiting_symptoms", context)
+        
+        return f"Thank you, {patient.name}. 👋\n\nPlease describe what brings you here today. You can say something like:\n• 'I have headache and fever'\n• 'Stomach pain for 3 days'\n• 'Chest pain when breathing'"
+    except Exception as e:
+        db.rollback()
+        return "❌ Sorry, there was an error saving your name. Please try again."
 
 def handle_symptoms(msg, phone, patient, context):
     """Process symptoms with AI triage"""
@@ -192,28 +193,29 @@ def handle_hospital_selection(msg, phone, patient, context):
         context["hospital_id"] = msg.strip()
         
         # Generate reference number
-        ref = f"WCA{datetime.now().strftime('%m%d%H%M')}{random.randint(10,99)}"
+        ref = f"WCA{datetime.utcnow().strftime('%m%d%H%M')}{random.randint(10,99)}"
         context["reference"] = ref
         
         # Save consultation to DB
-        db = get_db()
-        consultation = Consultation(
-            patient_phone=phone,
-            symptoms=context.get("symptoms", ""),
-            ai_assessment=json.dumps(context.get("ai_result", {})),
-            severity=context.get("ai_result", {}).get("severity", "unknown"),
-            hospital_id=msg.strip(),
-            reference_number=ref,
-            sha_claim_submitted=context.get("ai_result", {}).get("sha_claim_eligible", False)
-        )
-        db.add(consultation)
-        db.commit()
-        
-        update_state(phone, "confirmed", context)
-        
-        ai_result = context.get("ai_result", {})
-        
-        return f"""✅ *Booking Confirmed!*
+        try:
+            db = get_db()
+            consultation = Consultation(
+                patient_phone=phone,
+                symptoms=context.get("symptoms", ""),
+                ai_assessment=json.dumps(context.get("ai_result", {})),
+                severity=context.get("ai_result", {}).get("severity", "unknown"),
+                hospital_id=msg.strip(),
+                reference_number=ref,
+                sha_claim_submitted=context.get("ai_result", {}).get("sha_claim_eligible", False)
+            )
+            db.add(consultation)
+            db.commit()
+            
+            update_state(phone, "confirmed", context)
+            
+            ai_result = context.get("ai_result", {})
+            
+            return f"""✅ *Booking Confirmed!*
 
 *Patient:* {patient.name}
 *Reference:* `{ref}`
@@ -228,6 +230,9 @@ def handle_hospital_selection(msg, phone, patient, context):
 *Estimated wait time:* 15-30 minutes
 
 Type NEW for another consultation."""
+        except Exception as e:
+            db.rollback()
+            return "❌ Sorry, there was an error saving your booking. Please try again."
     
     else:
         valid_options = ", ".join(HOSPITALS.keys())
