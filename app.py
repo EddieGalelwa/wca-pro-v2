@@ -8,6 +8,7 @@ from sqlalchemy import text
 import logging
 import traceback
 from datetime import datetime
+import os  # Added for PORT environment variable
 
 # Setup logging
 logging.basicConfig(
@@ -99,4 +100,6 @@ if __name__ == "__main__":
     Base.metadata.create_all(engine)
     logger.info("WCA Pro started successfully")
     
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Use Railway's PORT environment variable or default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
