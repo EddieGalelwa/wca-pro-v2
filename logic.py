@@ -1,7 +1,7 @@
 # logic.py - Conversation State Machine
 from models import get_db, Patient, Consultation, ConversationState
 from ai_service import analyze_symptoms, generate_response
-from config import HOSPITALS, CLINIC_NAME
+from config import CLINIC_NAME
 from datetime import datetime
 import json
 import random
@@ -15,6 +15,7 @@ def get_or_create_state(phone):
         state = ConversationState(phone=phone, state="greeting", data="{}")
         db.add(state)
         db.commit()
+        db.refresh(state)
     
     return state
 
@@ -29,6 +30,7 @@ def update_state(phone, new_state, data=None):
             state.data = json.dumps(data)
         state.updated_at = datetime.utcnow()
         db.commit()
+        db.refresh(state)
     
     return state
 
@@ -51,11 +53,16 @@ def triage(incoming_msg, phone):
     """
     # Normalize input
     msg = incoming_msg.strip()
-    msg_lower = msg.lower()
+    msg_upper = msg.upper()  # FIXED: Define msg_upper here
     
     # Get state and patient
     state = get_or_create_state(phone)
     patient = get_patient(phone)
+    
+    # Refresh state to prevent detached instance
+    db = get_db()
+    state = db.query(ConversationState).filter_by(phone=phone).first()
+    
     context = json.loads(state.data) if state.data else {}
     
     # Handle RESET command anywhere
@@ -151,6 +158,7 @@ def handle_triage_result(msg, phone, patient, context):
     
     if any(word in msg_lower for word in ["yes", "book", "hospital", "continue"]):
         # Show hospital options
+        from config import HOSPITALS
         hospital_list = "\n".join([
             f"*{k}. {v['name']}* ({v['specialty']})"
             for k, v in HOSPITALS.items()
@@ -176,6 +184,8 @@ Reply YES to book or NEW to start over."""
 
 def handle_hospital_selection(msg, phone, patient, context):
     """Process hospital selection"""
+    from config import HOSPITALS
+    
     if msg.strip() in HOSPITALS:
         hospital = HOSPITALS[msg.strip()]
         context["selected_hospital"] = hospital
@@ -189,7 +199,6 @@ def handle_hospital_selection(msg, phone, patient, context):
         db = get_db()
         consultation = Consultation(
             patient_phone=phone,
-            name=patient.name,
             symptoms=context.get("symptoms", ""),
             ai_assessment=json.dumps(context.get("ai_result", {})),
             severity=context.get("ai_result", {}).get("severity", "unknown"),
@@ -232,12 +241,13 @@ def handle_confirmed(msg, phone, patient, context):
         update_state(phone, "greeting", {})
         return f"🏥 Welcome to {CLINIC_NAME}!\n\nMay I know your name please?"
     
-    elif "status" in msg_lower:
+    elif "status" in msg.lower():
         # Check recent consultation
         db = get_db()
         recent = db.query(Consultation).filter_by(patient_phone=phone).order_by(Consultation.created_at.desc()).first()
         
         if recent:
+            from config import HOSPITALS
             return f"📋 *Your Last Consultation*\nReference: `{recent.reference_number}`\nStatus: {recent.status.upper()}\nHospital: {HOSPITALS.get(recent.hospital_id, {}).get('name', 'Unknown')}\n\nType NEW for a new consultation."
         else:
             return "No recent consultations found. Type NEW to start."
