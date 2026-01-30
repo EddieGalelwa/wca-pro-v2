@@ -1,6 +1,4 @@
-# logic.py - Multi-Clinic PRODUCTION VERSION
-print("🚨 DEBUG MULTI-CLINIC LOGIC LOADED!")
-
+# logic.py - PRODUCTION VERSION
 from models import get_db, Clinic, Patient, Consultation, ConversationState, get_patient, get_or_create_state
 from ai_service import analyze_symptoms
 from config import CLINIC_NAME
@@ -8,24 +6,13 @@ from datetime import datetime
 import json
 import random
 
-# ============ CLINIC IDENTIFICATION ============
-
 def get_clinic_by_phone(incoming_phone):
-    """
-    Identify which clinic is being contacted based on Twilio phone number.
-    """
+    """Identify clinic from Twilio phone number"""
     db = get_db()
     clinic = db.query(Clinic).filter_by(is_active=True).first()
     
     if not clinic:
-        clinic = Clinic(
-            id="default_clinic_001",
-            name=CLINIC_NAME,
-            phone="254700000000",
-            plan="starter",
-            is_active=True,
-            created_at=datetime.utcnow()
-        )
+        clinic = Clinic(id="default_clinic_001", name=CLINIC_NAME, phone="254700000000", plan="starter", is_active=True, created_at=datetime.utcnow())
         db.add(clinic)
         db.commit()
         db.refresh(clinic)
@@ -33,7 +20,7 @@ def get_clinic_by_phone(incoming_phone):
     return clinic
 
 def update_state(phone, new_state, data=None, clinic_id=None):
-    """Update conversation state WITH CLINIC ISOLATION"""
+    """Update conversation state with clinic isolation"""
     db = get_db()
     state = db.query(ConversationState).filter_by(phone=phone, clinic_id=clinic_id).first()
     
@@ -48,48 +35,33 @@ def update_state(phone, new_state, data=None, clinic_id=None):
     return state
 
 def triage(incoming_msg, phone, twilio_phone=None):
-    """
-    Main triage function - NOW CLINIC-AWARE
-    """
+    """Main triage function - clinic-aware"""
     msg = incoming_msg.strip()
     msg_upper = msg.upper()
     
-    # Identify clinic
     clinic = get_clinic_by_phone(twilio_phone or phone)
-    
-    # Get state and patient
     state = get_or_create_state(phone, clinic.id)
     patient = get_patient(phone, clinic.id)
-    
     context = json.loads(state.data) if state.data else {}
     
-    # Handle RESET
     if msg_upper == "NEW" or msg_upper == "RESET":
         update_state(phone, "greeting", {}, clinic_id=clinic.id)
         return f"🏥 Welcome to {clinic.name}!\n\nMay I know your name please?"
     
-    # STATE MACHINE
     if state.state == "greeting":
         return handle_greeting(msg, phone, patient, context, clinic)
-    
     elif state.state == "awaiting_name":
         return handle_name(msg, phone, patient, context, clinic)
-    
     elif state.state == "awaiting_symptoms":
         return handle_symptoms(msg, phone, patient, context, clinic)
-    
     elif state.state == "triage_complete":
         return handle_triage_result(msg, phone, patient, context, clinic)
-    
     elif state.state == "selecting_hospital":
         return handle_hospital_selection(msg, phone, patient, context, clinic)
-    
     elif state.state == "confirmed":
         return handle_confirmed(msg, phone, patient, context, clinic)
     
-    return "I'm not sure I understand. Type NEW to start fresh."
-
-# ============ HANDLERS ============
+    return "Type NEW to start."
 
 def handle_greeting(msg, phone, patient, context, clinic):
     update_state(phone, "awaiting_name", context, clinic_id=clinic.id)
@@ -108,7 +80,7 @@ def handle_name(msg, phone, patient, context, clinic):
         return f"Thank you, {patient.name}. 👋\n\nPlease describe your symptoms..."
     except Exception as e:
         db.rollback()
-        return f"❌ Error: {str(e)[:50]}"
+        return f"❌ Error saving name: {str(e)[:50]}"
 
 def handle_symptoms(msg, phone, patient, context, clinic):
     context["symptoms"] = msg
@@ -124,8 +96,6 @@ def handle_symptoms(msg, phone, patient, context, clinic):
 
 *Symptoms:* {msg}
 *Severity:* {ai_result['severity'].upper()}
-*Assessment:* {ai_result['assessment']}
-
 *Recommendation:* {ai_result['recommended_action']}
 
 Reply YES to book or MORE for details."""
@@ -135,9 +105,8 @@ Reply YES to book or MORE for details."""
 
 {ai_result['assessment']}
 
-⚠️ Go to the nearest hospital IMMEDIATELY!"""
+⚠️ Go to hospital IMMEDIATELY!"""
         context["is_emergency"] = True
-        update_state(phone, "triage_complete", context, clinic_id=clinic.id)
     
     return response
 
@@ -148,7 +117,7 @@ def handle_triage_result(msg, phone, patient, context, clinic):
         from config import HOSPITALS
         hospital_list = "\n".join([f"*{k}. {v['name']}* ({v['specialty']})" for k, v in HOSPITALS.items()])
         update_state(phone, "selecting_hospital", context, clinic_id=clinic.id)
-        return f"🏥 *Select Hospital*\n\n{hospital_list}\n\nReply with the number (1-4):"
+        return f"🏥 *Select Hospital*\n\n{hospital_list}\n\nReply with number (1-4):"
     
     elif "more" in msg_lower:
         ai_result = context.get("ai_result", {})
@@ -159,7 +128,7 @@ def handle_triage_result(msg, phone, patient, context, clinic):
 
 Reply YES to book."""
     
-    return "Reply YES to book, MORE for details, or NEW to restart."
+    return "Reply YES, MORE, or NEW."
 
 def handle_hospital_selection(msg, phone, patient, context, clinic):
     from config import HOSPITALS
@@ -215,10 +184,8 @@ def handle_confirmed(msg, phone, patient, context, clinic):
         recent = db.query(Consultation).filter_by(patient_phone=phone, clinic_id=clinic.id).order_by(Consultation.created_at.desc()).first()
         
         if recent:
-            return f"📋 *Last Consultation*\nReference: `{recent.reference_number}`\nStatus: {recent.status.upper()}\n\nType NEW for new consultation."
+            return f"📋 *Last Consultation*\nReference: `{recent.reference_number}`\n\nType NEW for new consultation."
         else:
             return "No consultations found. Type NEW to start."
     
-    return "Type NEW to start fresh or STATUS to check."
-
-print(f"🚨 LOGGING LOGIC.PY FROM: {__file__}")
+    return "Type NEW to start fresh."
