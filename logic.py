@@ -1,6 +1,6 @@
-# logic.py - Line 1
+# logic.py - Multi-Clinic Version (RESOLVED)
 print("🚨 DEBUG MULTI-CLINIC LOGIC LOADED!")
-# logic.py - Multi-Clinic Version
+
 from models import get_db, Clinic, Patient, Consultation, ConversationState, get_patient, get_or_create_state
 from ai_service import analyze_symptoms
 from config import CLINIC_NAME
@@ -306,5 +306,6 @@ def handle_confirmed(msg, phone, patient, context, clinic):
     
     else:
         return "Type NEW to start a fresh consultation or STATUS to check your last booking."
-    # Add this at the bottom of logic.py
-    print(f"🚨 LOADING LOGIC.PY FROM: {__file__}")
+
+# Add this at the bottom of logic.py
+print(f"🚨 LOADING LOGIC.PY FROM: {__file__}")

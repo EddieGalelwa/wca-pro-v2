@@ -9,4 +9,5 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+# Use shell form to properly expand $PORT environment variable
+CMD python app.py
