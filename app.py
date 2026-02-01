@@ -1,8 +1,9 @@
-# app.py - Meta WhatsApp API Version
+# app.py - Meta WhatsApp Business API Integration (PRODUCTION)
 from flask import Flask, request, jsonify
 import requests
 import logging
 import os
+from sqlalchemy import text  # FIXED: Added text import
 from logic import triage
 from models import get_db, Consultation
 from config_meta import (
@@ -14,7 +15,10 @@ from config_meta import (
 from datetime import datetime
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -105,21 +109,29 @@ def send_whatsapp_message(to_number, message_text):
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - FIXED with text() wrapper"""
     try:
+        # Test database connection
         db = get_db()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))  # FIXED: Added text() wrapper
+        
         return {
             "status": "healthy",
             "service": "WCA Pro - Meta Edition",
             "database": "connected"
         }, 200
+        
     except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}, 500
+        logger.error(f"💥 Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy", 
+            "error": str(e)
+        }, 500
 
 if __name__ == "__main__":
     from models import Base, engine
     Base.metadata.create_all(engine)
+    logger.info("WCA Pro (Meta Edition) started successfully")
     
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
