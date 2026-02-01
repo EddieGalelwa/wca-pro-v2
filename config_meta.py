@@ -1,13 +1,14 @@
 # config_meta.py - Meta WhatsApp Business API Credentials
-# Save this file and NEVER share the ACCESS_TOKEN
+# WARNING: Keep ACCESS_TOKEN and CAL_API_KEY SECURE - treat like passwords
 
-# WhatsApp Business Account Credentials
+# Meta WhatsApp Business API
 PHONE_NUMBER_ID = "894699720403959"
 WHATSAPP_BUSINESS_ACCOUNT_ID = "894852469986109"
-ACCESS_TOKEN = "EAAMRy59fHdsBQqGIA0ZBaZCRZC3kCh1CMKPw2C3rCkMaIoUa9Fd4F0nLmSmsr6xPqpiaSkf6dc2u4E2eC8DigmkKQUatRBuPDzWxXZAC85zVE4oZCzmcUgaParSU51xVm7Qsu9UKrDpuEr5lVj8UJLZAGCOJxLWD9qJZBnZCxNFH3OefkJvkCQQDlBM0cEl02QJG9GFDoofuQavucgYCVM5gR1P5FjKhalZCEsHgAVt8nBBzjlpm18VOJZAaQtay5Q96yggYsEXNIKf1FQSOvd4GflsQXU"  # You generated this last night
-
-# Test Phone Number (Meta provides this for free)
+ACCESS_TOKEN = "EAAMRy59fHdsBQqGIA0ZBaZCRZC3kCh1CMKPw2C3rCkMaIoUa9Fd4F0nLmSmsr6xPqpiaSkf6dc2u4E2eC8DigmkKQUatRBuPDzWxXZAC85zVE4oZCzmcUgaParSU51xVm7Qsu9UKrDpuEr5lVj8UJLZAGCOJxLWD9qJZBnZCxNFH3OefkJvkCQQDlBM0cEl02QJG9GFDoofuQavucgYCVM5gR1P5FjKhalZCEsHgAVt8nBBzjlpm18VOJZAaQtay5Q96yggYsEXNIKf1FQSOvd4GflsQXU"
 TEST_PHONE_NUMBER = "+15551763931"
-
-# Webhook Verification Token (random string for security)
 WEBHOOK_VERIFY_TOKEN = "afyacare_webhook_2024_secure"
+
+# Cal.com API (FREE - NO CREDIT CARD)
+CAL_API_KEY = "cal_live_a18e2045d677b58ed59ea20d4ecb8201"
+CAL_USERNAME = "galelwa-eddie-ed100-g-27112-25-b97nhi"  # ← FIXED
+EVENT_TYPE_ID = "4595761"  # ← FIXED
